@@ -158,6 +158,8 @@ app.post("/chat", async (req, res) => {
 /* =========================
    ✅ START SERVER
 ========================= */
-app.listen(3000, () => {
-  console.log("🚀 Agent running on http://localhost:3000");
+const PORT = process.env.PORT || 3000; // Use host-assigned port or 3000 locally
+
+app.listen(PORT, () => {
+  console.log(`🚀 Agent running on port ${PORT}`);
 });
