@@ -1,7 +1,9 @@
 import OpenAI from "openai";
 import express from "express";
 import dotenv from "dotenv";
+import path from "path";
 import cors from "cors";
+import { fileURLToPath } from "url";
 
 import {
   getAccounts,
@@ -14,29 +16,41 @@ dotenv.config();
 
 const app = express();
 
-/* =========================
-   ✅ CORS CONFIGURATION
-========================= */
-app.use(cors({
-  origin: "http://localhost:5173",  // React frontend
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type"],
-}));
+// =========================
+// ✅ Directory helpers
+// =========================
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
+// =========================
+// ✅ FRONTEND (VITE) BUILD
+// =========================
+const frontendPath = path.join(__dirname, "dist"); // Ensure your Vite build is here
+app.use(express.static(frontendPath));
 
+// =========================
+// ✅ CORS (optional, for development)
+// =========================
+if (process.env.NODE_ENV === "development") {
+  app.use(cors({
+    origin: "http://localhost:5173", // React dev server
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
+  }));
+}
 
 app.use(express.json());
 
-/* =========================
-   ✅ OPENAI SETUP
-========================= */
+// =========================
+// ✅ OPENAI SETUP
+// =========================
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-/* =========================
-   ✅ TOOL DEFINITIONS
-========================= */
+// =========================
+// ✅ TOOLS
+// =========================
 const tools = [
   {
     type: "function",
@@ -92,9 +106,9 @@ const tools = [
   },
 ];
 
-/* =========================
-   ✅ CHAT ROUTE
-========================= */
+// =========================
+// ✅ CHAT ROUTE
+// =========================
 app.post("/chat", async (req, res) => {
   try {
     if (!req.body || !req.body.message) {
@@ -123,19 +137,15 @@ app.post("/chat", async (req, res) => {
         case "getAccounts":
           result = await getAccounts(args.limit || 5);
           break;
-
         case "getOpportunitiesByAccount":
           result = await getOpportunitiesByAccount(args.accountName);
           break;
-
         case "createAccount":
           result = await createAccount(args.name);
           break;
-
         case "getOpenCases":
           result = await getOpenCases();
           break;
-
         default:
           result = { error: "Unknown tool" };
       }
@@ -155,10 +165,17 @@ app.post("/chat", async (req, res) => {
   }
 });
 
-/* =========================
-   ✅ START SERVER
-========================= */
-const PORT = process.env.PORT || 3000; // Use host-assigned port or 3000 locally
+// =========================
+// ✅ SPA FALLBACK (for frontend routing)
+// =========================
+app.get("*", (req, res) => {
+  res.sendFile(path.join(frontendPath, "index.html"));
+});
+
+// =========================
+// ✅ START SERVER
+// =========================
+const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log(`🚀 Agent running on port ${PORT}`);
