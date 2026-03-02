@@ -17,23 +17,24 @@ dotenv.config();
 const app = express();
 
 // =========================
-// ✅ Directory helpers
+// ✅ Directory Helpers
 // =========================
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // =========================
-// ✅ FRONTEND (VITE) BUILD
+// ✅ FRONTEND (VITE BUILD)
+// Make sure `npm run build` creates /dist
 // =========================
-const frontendPath = path.join(__dirname, "dist"); // Ensure your Vite build is here
+const frontendPath = path.join(__dirname, "dist");
 app.use(express.static(frontendPath));
 
 // =========================
-// ✅ CORS (optional, for development)
+// ✅ CORS (Only for Dev)
 // =========================
 if (process.env.NODE_ENV === "development") {
   app.use(cors({
-    origin: "http://localhost:5173", // React dev server
+    origin: "http://localhost:5173",
     methods: ["GET", "POST", "OPTIONS"],
     allowedHeaders: ["Content-Type"],
   }));
@@ -49,7 +50,7 @@ const openai = new OpenAI({
 });
 
 // =========================
-// ✅ TOOLS
+// ✅ TOOL DEFINITIONS
 // =========================
 const tools = [
   {
@@ -60,10 +61,10 @@ const tools = [
       parameters: {
         type: "object",
         properties: {
-          limit: { type: "number" },
-        },
-      },
-    },
+          limit: { type: "number" }
+        }
+      }
+    }
   },
   {
     type: "function",
@@ -73,11 +74,11 @@ const tools = [
       parameters: {
         type: "object",
         properties: {
-          accountName: { type: "string" },
+          accountName: { type: "string" }
         },
-        required: ["accountName"],
-      },
-    },
+        required: ["accountName"]
+      }
+    }
   },
   {
     type: "function",
@@ -87,23 +88,23 @@ const tools = [
       parameters: {
         type: "object",
         properties: {
-          name: { type: "string" },
+          name: { type: "string" }
         },
-        required: ["name"],
-      },
-    },
+        required: ["name"]
+      }
+    }
   },
   {
     type: "function",
     function: {
       name: "getOpenCases",
-      description: "Get open cases from Salesforce",
+      description: "Get open Salesforce cases",
       parameters: {
         type: "object",
-        properties: {},
-      },
-    },
-  },
+        properties: {}
+      }
+    }
+  }
 ];
 
 // =========================
@@ -111,25 +112,28 @@ const tools = [
 // =========================
 app.post("/chat", async (req, res) => {
   try {
-    if (!req.body || !req.body.message) {
-      return res.status(400).json({ error: "Message required" });
+    if (!req.body?.message) {
+      return res.status(400).json({ error: "Message is required" });
     }
 
     const userMessage = req.body.message;
 
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      messages: [{ role: "user", content: userMessage }],
+      messages: [
+        { role: "system", content: "You are a helpful Salesforce AI assistant." },
+        { role: "user", content: userMessage }
+      ],
       tools,
-      tool_choice: "auto",
+      tool_choice: "auto"
     });
 
     const message = response.choices[0].message;
 
-    // If OpenAI decides to call a tool
-    if (message.tool_calls) {
+    // 🔥 If OpenAI calls a tool
+    if (message.tool_calls && message.tool_calls.length > 0) {
       const toolCall = message.tool_calls[0];
-      const args = JSON.parse(toolCall.function.arguments);
+      const args = JSON.parse(toolCall.function.arguments || "{}");
 
       let result;
 
@@ -137,38 +141,47 @@ app.post("/chat", async (req, res) => {
         case "getAccounts":
           result = await getAccounts(args.limit || 5);
           break;
+
         case "getOpportunitiesByAccount":
           result = await getOpportunitiesByAccount(args.accountName);
           break;
+
         case "createAccount":
           result = await createAccount(args.name);
           break;
+
         case "getOpenCases":
           result = await getOpenCases();
           break;
+
         default:
           result = { error: "Unknown tool" };
       }
 
       return res.json({
         toolUsed: toolCall.function.name,
-        data: result,
+        data: result
       });
     }
 
-    // Normal text response
-    res.json({ message: message.content });
+    // ✅ Normal text response
+    return res.json({ message: message.content });
 
   } catch (error) {
     console.error("Server Error:", error);
-    res.status(500).json({ error: error.message });
+    return res.status(500).json({
+      error: "Internal Server Error",
+      details: error.message
+    });
   }
 });
 
 // =========================
-// ✅ SPA FALLBACK (for frontend routing)
+// ✅ SPA FALLBACK FIX
+// (Fixes Node 24 + Express path error)
 // =========================
-app.get("*", (req, res) => {
+app.use((req, res, next) => {
+  if (req.method !== "GET") return next();
   res.sendFile(path.join(frontendPath, "index.html"));
 });
 
@@ -178,5 +191,5 @@ app.get("*", (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Agent running on port ${PORT}`);
+  console.log(`🚀 Salesforce AI Agent running on port ${PORT}`);
 });
